@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    "module": "nodenext",           /* Changé ici */
+    "target": "esnext", 
+
+    "moduleResolution": "nodenext", /* Doit correspondre à 'module' */
+
+    "strict": true,
+    "skipLibCheck": true,
+    "sourceMap": true
+  }
+}
