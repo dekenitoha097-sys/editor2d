@@ -27,5 +27,7 @@ const sourceRect = new RectangleObject(1*250, 2*256, 250, 256, "");
 const sprite = new SpriteObject(destinationRect, sourceRect, "../resources/image.png");
 engine.addObjets(sprite);
 
+const Rect = new RectangleObject(500,500,300,100,"purple")
+engine.addObjets(Rect);
 // Start the game loop
 engine.start()
