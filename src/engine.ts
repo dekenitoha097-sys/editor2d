@@ -20,13 +20,14 @@ export class Engine {
     addObjets(obj: GameObject) {
         this.objects.push(obj)
     }
-    
+
     // Main render function - draws all game objects to the canvas
     Render() {
         if (!this.ctx) return;
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.objects.forEach(obj => {
             obj.draw(this.ctx!)
-            
+
         })
     }
 }
