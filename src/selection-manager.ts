@@ -31,10 +31,26 @@ export class SelectionManager {
     private overrideAttempts: number = 0;
     private lastSnapPosition: { x: number; y: number } | null = null;
     private allObjects: GameObject[] = [];
+    
+    // Screen to world coordinate converter
+    private screenToWorldConverter: ((screenX: number, screenY: number) => { x: number; y: number }) | null = null;
+    
+    // Callback for custom properties panel update (set by user of the library)
+    private propertiesPanelCallback: ((obj: GameObject | null, layerName?: string) => void) | null = null;
+
+    // Set a callback to handle properties panel updates (allows user to customize UI)
+    setPropertiesPanelCallback(callback: (obj: GameObject | null, layerName?: string) => void): void {
+        this.propertiesPanelCallback = callback;
+    }
 
     // Set all objects (called by engine to provide objects for snap detection)
     setAllObjects(objects: GameObject[]): void {
         this.allObjects = objects;
+    }
+    
+    // Set the screen to world coordinate converter
+    setScreenToWorldConverter(converter: (screenX: number, screenY: number) => { x: number; y: number }): void {
+        this.screenToWorldConverter = converter;
     }
 
     constructor(canvas: HTMLCanvasElement, magneticConfig?: Partial<MagneticConfig>) {
@@ -65,9 +81,9 @@ export class SelectionManager {
     }
 
     // Select an object
-    select(obj: GameObject | null): void {
+    select(obj: GameObject | null, layerName?: string): void {
         this.selectedObject = obj;
-        this.updatePropertiesPanel(obj);
+        this.updatePropertiesPanel(obj, layerName);
     }
 
     // Get currently selected object
@@ -82,75 +98,20 @@ export class SelectionManager {
     }
 
     // Update properties panel with selected object info
-    private updatePropertiesPanel(obj: GameObject | null): void {
-        const panel = document.getElementById('object-info');
-        if (!panel) return;
-
-        if (!obj) {
-            panel.innerHTML = '<p class="no-selection">No object selected</p>';
+    // If a custom callback is set, use it; otherwise do nothing (let user handle it)
+    updatePropertiesPanel(obj: GameObject | null, layerName?: string): void {
+        // If user provided a custom callback, use it
+        if (this.propertiesPanelCallback) {
+            this.propertiesPanelCallback(obj, layerName);
             return;
         }
+        
+        // Default: do nothing (user handles their own UI)
+    }
 
-        const bounds = obj.getBounds();
-        let html = '';
-
-        // Object type
-        html += `<div class="property-group">
-            <label>Type</label>
-            <span class="property-value">${obj.type}</span>
-        </div>`;
-
-        // Object ID
-        html += `<div class="property-group">
-            <label>ID</label>
-            <span class="property-value" style="font-size: 10px;">${obj.id.substring(0, 8)}...</span>
-        </div>`;
-
-        // Position
-        html += `<div class="property-group">
-            <label>Position</label>
-            <span class="property-value">X: ${Math.round(bounds.x)}</span>
-            <span class="property-value">Y: ${Math.round(bounds.y)}</span>
-        </div>`;
-
-        // Size
-        html += `<div class="property-group">
-            <label>Size</label>
-            <span class="property-value">W: ${Math.round(bounds.w)}</span>
-            <span class="property-value">H: ${Math.round(bounds.h)}</span>
-        </div>`;
-
-        // Type-specific properties
-        if ('color' in obj) {
-            html += `<div class="property-group">
-                <label>Color</label>
-                <span class="property-value">${(obj as any).color}</span>
-            </div>`;
-        }
-
-        if ('radius' in obj) {
-            html += `<div class="property-group">
-                <label>Radius</label>
-                <span class="property-value">${(obj as any).radius}</span>
-            </div>`;
-        }
-
-        if ('imageSource' in obj) {
-            html += `<div class="property-group">
-                <label>Image Source</label>
-                <span class="property-value" style="font-size: 10px;">${(obj as any).imageSource}</span>
-            </div>`;
-        }
-
-        // Rotation (if available)
-        if ('rotation' in obj && (obj as any).rotation !== undefined) {
-            html += `<div class="property-group">
-                <label>Rotation</label>
-                <span class="property-value">${Math.round((obj as any).rotation)}°</span>
-            </div>`;
-        }
-
-        panel.innerHTML = html;
+    // Get the currently selected object (useful for custom UI)
+    getSelectedObject(): GameObject | null {
+        return this.selectedObject;
     }
 
     // Update properties panel with layer info
@@ -287,26 +248,41 @@ export class SelectionManager {
             this.magneticManager.clearSnap();
             
             if (this.selectedObject) {
+                // Convert to world coordinates for hit test
+                const worldPos = this.screenToWorldConverter 
+                    ? this.screenToWorldConverter(pos.x, pos.y)
+                    : { x: pos.x, y: pos.y };
                 const bounds = this.selectedObject.getBounds();
                 
                 // Check if clicking on a resize handle first
-                const handle = this.getHandleAtPosition(pos.x, pos.y, bounds);
+                const handle = this.getHandleAtPosition(worldPos.x, worldPos.y, bounds);
                 
                 if (handle) {
                     this.isResizing = true;
                     this.activeResizeHandle = handle;
                     this.initialBounds = { ...bounds };
-                    this.resizeStartPos = { x: pos.x, y: pos.y };
+                    // Store world position for resize delta calculation
+                    const worldPos = this.screenToWorldConverter 
+                        ? this.screenToWorldConverter(pos.x, pos.y)
+                        : { x: pos.x, y: pos.y };
+                    this.resizeStartPos = { x: worldPos.x, y: worldPos.y };
                     this.canvas.style.cursor = this.getResizeCursor(handle);
                     return;
                 }
                 
                 // Otherwise check if clicking on the object for dragging
-                if (this.selectedObject.containsPoint(pos.x, pos.y)) {
+                // Convert to world coordinates for hit test
+                const worldClickPos = this.screenToWorldConverter 
+                    ? this.screenToWorldConverter(pos.x, pos.y)
+                    : { x: pos.x, y: pos.y };
+                    
+                if (this.selectedObject.containsPoint(worldClickPos.x, worldClickPos.y)) {
+                    const bounds = this.selectedObject.getBounds();
+                    
                     this.isDragging = true;
                     this.dragOffset = {
-                        x: pos.x - this.selectedObject.getBounds().x,
-                        y: pos.y - this.selectedObject.getBounds().y
+                        x: worldClickPos.x - bounds.x,
+                        y: worldClickPos.y - bounds.y
                     };
                     this.canvas.style.cursor = "grabbing";
                 }
@@ -319,10 +295,15 @@ export class SelectionManager {
             
             if (this.isResizing && this.selectedObject && this.activeResizeHandle) {
                 // Handle resizing - calculate delta from start position
+                // Use world coordinates for delta calculation
+                const worldPos = this.screenToWorldConverter 
+                    ? this.screenToWorldConverter(pos.x, pos.y)
+                    : { x: pos.x, y: pos.y };
+                const dx = worldPos.x - this.resizeStartPos.x;
+                const dy = worldPos.y - this.resizeStartPos.y;
+                
                 const obj = this.selectedObject;
                 const ib = this.initialBounds;
-                const dx = pos.x - this.resizeStartPos.x;
-                const dy = pos.y - this.resizeStartPos.y;
                 
                 let newBounds = { x: ib.x, y: ib.y, w: ib.w, h: ib.h };
                 
@@ -374,9 +355,14 @@ export class SelectionManager {
                 this.canvas.style.cursor = this.getResizeCursor(this.activeResizeHandle);
             } else if (this.isDragging && this.selectedObject) {
                 // Handle dragging with magnetic snap
+                // Convert screen position to world position
+                const worldPos = this.screenToWorldConverter 
+                    ? this.screenToWorldConverter(pos.x, pos.y)
+                    : { x: pos.x, y: pos.y };
+                
                 const bounds = this.selectedObject.getBounds();
-                let newX = pos.x - this.dragOffset.x;
-                let newY = pos.y - this.dragOffset.y;
+                let newX = worldPos.x - this.dragOffset.x;
+                let newY = worldPos.y - this.dragOffset.y;
                 
                 // Track if we're trying to override by force
                 const currentSnap = this.magneticManager.getCurrentSnapPoint();
@@ -419,12 +405,16 @@ export class SelectionManager {
                 }
             } else if (this.selectedObject) {
                 // Change cursor if hovering over handles or selected object
+                // Convert to world coordinates for hit test
+                const worldPos = this.screenToWorldConverter 
+                    ? this.screenToWorldConverter(pos.x, pos.y)
+                    : { x: pos.x, y: pos.y };
                 const bounds = this.selectedObject.getBounds();
-                const handle = this.getHandleAtPosition(pos.x, pos.y, bounds);
+                const handle = this.getHandleAtPosition(worldPos.x, worldPos.y, bounds);
                 
                 if (handle) {
                     this.canvas.style.cursor = this.getResizeCursor(handle);
-                } else if (this.selectedObject.containsPoint(pos.x, pos.y)) {
+                } else if (this.selectedObject.containsPoint(worldPos.x, worldPos.y)) {
                     this.canvas.style.cursor = "grab";
                 } else {
                     this.canvas.style.cursor = "default";

@@ -10,7 +10,8 @@ const canvas = document.getElementById("canvas") as HTMLCanvasElement
 
 // Create a new engine instance with the canvas
 const engine = new Engine(canvas);
-
+// Start the game loop
+engine.start();
 // ============================================
 // Layer System Demo
 // ============================================
@@ -128,8 +129,7 @@ document.addEventListener("keydown", (event) => {
     }
 });
 
-// Start the game loop
-engine.start();
+
 
 console.log("\n=== Controls ===");
 console.log("Click: Select object");
