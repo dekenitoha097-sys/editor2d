@@ -107,6 +107,120 @@ export class Engine {
         return this.layerManager.addObjectToLayer(obj, layerId);
     }
 
+    // Get object by ID from all layers
+    getObjectById(objectId: string): GameObject | null {
+        const allObjects = this.layerManager.getAllVisibleObjects();
+        return allObjects.find(obj => obj.id === objectId) || null;
+    }
+
+    // Get all objects from all layers (for HTML rendering)
+    getAllObjects(): Array<{ id: string; name: string; type: string; layerId: string; layerName: string }> {
+        const result: Array<{ id: string; name: string; type: string; layerId: string; layerName: string }> = [];
+        const layers = this.layerManager.getLayers();
+        
+        for (const layer of layers) {
+            for (const obj of layer.objects) {
+                result.push({
+                    id: obj.id,
+                    name: obj.name,
+                    type: obj.type,
+                    layerId: layer.id,
+                    layerName: layer.name
+                });
+            }
+        }
+        
+        return result;
+    }
+
+    // Set object color (supports RectangleObject and CircleObject)
+    setObjectColor(objectId: string, color: string): boolean {
+        const obj = this.getObjectById(objectId);
+        if (!obj) return false;
+        
+        // Check if object has a color property
+        if ('color' in obj) {
+            (obj as any).color = color;
+            return true;
+        }
+        return false;
+    }
+
+    // Set object name
+    setObjectName(objectId: string, name: string): boolean {
+        const obj = this.getObjectById(objectId);
+        if (!obj) return false;
+        
+        obj.name = name;
+        return true;
+    }
+
+    // Get object properties as JSON-safe object for HTML rendering
+    getObjectProperties(objectId: string): Record<string, unknown> | null {
+        const obj = this.getObjectById(objectId);
+        if (!obj) return null;
+        
+        const layer = this.layerManager.findLayerForObject(objectId);
+        
+        return {
+            id: obj.id,
+            name: obj.name,
+            type: obj.type,
+            layerId: layer?.id || null,
+            layerName: layer?.name || null,
+            bounds: obj.getBounds(),
+            // Include type-specific properties
+            ...this.getTypeSpecificProperties(obj)
+        };
+    }
+
+    // Get type-specific properties for an object
+    private getTypeSpecificProperties(obj: GameObject): Record<string, unknown> {
+        const props: Record<string, unknown> = {};
+        
+        if (obj.type === 'rectangle') {
+            props.x = (obj as any).x;
+            props.y = (obj as any).y;
+            props.w = (obj as any).w;
+            props.h = (obj as any).h;
+            props.color = (obj as any).color;
+        } else if (obj.type === 'circle') {
+            props.x = (obj as any).x;
+            props.y = (obj as any).y;
+            props.radius = (obj as any).radius;
+            props.color = (obj as any).color;
+        } else if (obj.type === 'image') {
+            props.x = (obj as any).x;
+            props.y = (obj as any).y;
+            props.w = (obj as any).w;
+            props.h = (obj as any).h;
+            props.imageSource = (obj as any).imageSource;
+        } else if (obj.type === 'sprite') {
+            props.destination = (obj as any).destination;
+            props.source = (obj as any).source;
+            props.imageSource = (obj as any).imageSource;
+        }
+        
+        return props;
+    }
+
+    // Add event listener for selection changes
+    onSelectionChange(callback: (object: GameObject | null, layerName: string | undefined) => void): void {
+        if (this.selectionManager) {
+            const originalSelect = this.selectionManager.select.bind(this.selectionManager);
+            this.selectionManager.select = (obj: GameObject, layerName?: string) => {
+                originalSelect(obj, layerName);
+                callback(obj, layerName);
+            };
+            
+            const originalClear = this.selectionManager.clearSelection.bind(this.selectionManager);
+            this.selectionManager.clearSelection = () => {
+                originalClear();
+                callback(null, undefined);
+            };
+        }
+    }
+
     // Main render function - draws all game objects to the canvas
     Render() {
         if (!this.ctx) return;

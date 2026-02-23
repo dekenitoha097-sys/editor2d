@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Editor2D</title>
+    <title>Editor2D - HTML-Based Properties Panel</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -9,11 +9,13 @@
             padding: 20px;
             display: flex;
             gap: 20px;
+            background-color: #f0f0f0;
         }
         
         .main-content {
             display: flex;
             gap: 20px;
+            flex: 1;
         }
         
         .canvas-container {
@@ -25,20 +27,68 @@
             margin-top: 0;
         }
         
-        #properties-panel {
-            width: 300px;
-            min-height: 400px;
+        .panel {
+            width: 280px;
+            min-height: 500px;
             padding: 15px;
+            background-color: #fff;
             border: 1px solid #ccc;
-            background-color: #f5f5f5;
             border-radius: 5px;
+            display: flex;
+            flex-direction: column;
         }
         
-        #properties-panel h2 {
+        .panel h2 {
             margin-top: 0;
-            font-size: 18px;
+            font-size: 16px;
             border-bottom: 1px solid #ccc;
             padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .objects-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .object-item {
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .object-item:hover {
+            background-color: #e8e8e8;
+        }
+        
+        .object-item.selected {
+            background-color: #d4e8ff;
+            border: 1px solid #4a90d9;
+        }
+        
+        .object-item .object-name {
+            font-weight: bold;
+            font-size: 13px;
+        }
+        
+        .object-item .object-type {
+            font-size: 11px;
+            color: #666;
+        }
+        
+        .object-color-preview {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 8px;
         }
         
         .property-group {
@@ -50,24 +100,34 @@
             font-weight: bold;
             margin-bottom: 5px;
             color: #333;
+            font-size: 12px;
         }
         
-        .property-group span {
-            display: block;
-            color: #666;
+        .property-group input[type="text"],
+        .property-group input[type="number"] {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+            box-sizing: border-box;
         }
         
-        .no-selection {
-            color: #999;
-            font-style: italic;
+        .property-group input[type="color"] {
+            width: 100%;
+            height: 30px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
         }
         
-        .property-value {
+        .property-group .property-value {
             font-family: monospace;
-            background-color: #fff;
-            padding: 3px 8px;
+            font-size: 12px;
+            color: #666;
+            background-color: #f5f5f5;
+            padding: 4px 8px;
             border-radius: 3px;
-            border: 1px solid #ddd;
         }
         
         .layer-info {
@@ -75,6 +135,64 @@
             padding: 10px;
             border-radius: 5px;
             margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .no-selection {
+            color: #999;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .info-label {
+            color: #666;
+        }
+        
+        .info-value {
+            font-weight: bold;
+        }
+        
+        button {
+            padding: 8px 16px;
+            background-color: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background-color: #3a7bc8;
+        }
+        
+        button.danger {
+            background-color: #d94a4a;
+        }
+        
+        button.danger:hover {
+            background-color: #c83a3a;
+        }
+        
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: #333;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -84,18 +202,260 @@
     <div class="main-content">
         <div class="canvas-container">
             <h1>Editor2D</h1>
-            <canvas style="border: 1px solid #333;" id="canvas" width="1500" height="800"></canvas>
+            <canvas style="border: 1px solid #333;" id="canvas" width="1200" height="700"></canvas>
+            <p style="font-size: 12px; color: #666;">
+                Click to select • Drag to move • Delete to remove • Space+Drag to pan • Scroll to zoom
+            </p>
         </div>
         
-        <div id="properties-panel">
+        <div class="panel">
+            <h2>Objects</h2>
+            <div id="objects-list" class="objects-list">
+                <p class="no-selection">Loading objects...</p>
+            </div>
+        </div>
+        
+        <div class="panel">
             <h2>Properties</h2>
-            <div id="object-info">
-                <p class="no-selection">No object selected</p>
+            <div id="properties-panel">
+                <p class="no-selection">Click an object to select it</p>
             </div>
         </div>
     </div>
 
-<script type="module" src="../dist/teste.js"></script>
+    <div class="debug-info" id="debug-info">Waiting for engine...</div>
+
+<script src="../dist/teste.js"></script>
+
+<script>
+// Wait for engine to be ready and initialize bridge
+let engine = null;
+let selectedObjectId = null;
+
+function initBridge() {
+    // Get engine from window (exposed by teste.ts)
+    engine = window.editorEngine;
+    
+    if (!engine) {
+        document.getElementById('debug-info').textContent = 'Engine not found, retrying...';
+        setTimeout(initBridge, 500);
+        return;
+    }
+    
+    document.getElementById('debug-info').textContent = 'Engine connected!';
+    console.log('Editor bridge initialized with engine:', engine);
+    
+    // Setup selection change listener
+    if (engine.selectionManager) {
+        // Override select to also call our callback
+        const originalSelect = engine.selectionManager.select.bind(engine.selectionManager);
+        engine.selectionManager.select = function(obj, layerName) {
+            originalSelect(obj, layerName);
+            if (obj) {
+                selectedObjectId = obj.id;
+                const layer = engine.layerManager.findLayerForObject(obj.id);
+                updatePropertiesPanel(obj, layer?.name);
+                highlightSelectedObject(obj.id);
+            }
+        };
+        
+        const originalClear = engine.selectionManager.clearSelection.bind(engine.selectionManager);
+        engine.selectionManager.clearSelection = function() {
+            originalClear();
+            selectedObjectId = null;
+            clearPropertiesPanel();
+            clearObjectHighlight();
+        };
+    }
+    
+    // Initial render
+    refreshObjectsList();
+    
+    // Listen for canvas clicks
+    const canvas = document.getElementById("canvas");
+    canvas.addEventListener('click', () => {
+        setTimeout(() => {
+            if (engine && engine.selectionManager) {
+                const selected = engine.selectionManager.getSelected();
+                if (selected) {
+                    selectedObjectId = selected.id;
+                    const layer = engine.layerManager.findLayerForObject(selected.id);
+                    updatePropertiesPanel(selected, layer?.name);
+                    highlightSelectedObject(selected.id);
+                }
+            }
+        }, 50);
+    });
+}
+
+function refreshObjectsList() {
+    if (!engine) return;
+    
+    const listContainer = document.getElementById('objects-list');
+    
+    try {
+        const objects = engine.getAllObjects();
+        
+        if (!objects || objects.length === 0) {
+            listContainer.innerHTML = '<p class="no-selection">No objects in scene</p>';
+            return;
+        }
+        
+        listContainer.innerHTML = '';
+        
+        objects.forEach(obj => {
+            const item = document.createElement('div');
+            item.className = 'object-item';
+            item.dataset.id = obj.id;
+            
+            const props = engine.getObjectProperties(obj.id);
+            const hasColor = props && 'color' in props;
+            const colorPreview = hasColor ? 
+                `<span class="object-color-preview" style="background-color: ${props.color}"></span>` : '';
+            
+            item.innerHTML = `
+                <div>
+                    <div class="object-name">${obj.name}</div>
+                    <div class="object-type">${obj.type} • ${obj.layerName}</div>
+                </div>
+                ${colorPreview}
+            `;
+            
+            item.addEventListener('click', () => selectObjectInEngine(obj.id));
+            listContainer.appendChild(item);
+        });
+    } catch (e) {
+        console.error('Error refreshing objects list:', e);
+    }
+}
+
+function selectObjectInEngine(objectId) {
+    if (!engine) return;
+    
+    try {
+        const obj = engine.getObjectById(objectId);
+        if (obj && engine.selectionManager) {
+            const layer = engine.layerManager.findLayerForObject(objectId);
+            engine.selectionManager.select(obj, layer?.name);
+            
+            selectedObjectId = objectId;
+            updatePropertiesPanel(obj, layer?.name);
+            highlightSelectedObject(objectId);
+        }
+    } catch (e) {
+        console.error('Error selecting object:', e);
+    }
+}
+
+function highlightSelectedObject(objectId) {
+    document.querySelectorAll('.object-item').forEach(item => {
+        item.classList.remove('selected');
+        if (item.dataset.id === objectId) {
+            item.classList.add('selected');
+        }
+    });
+}
+
+function clearObjectHighlight() {
+    document.querySelectorAll('.object-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+}
+
+function updatePropertiesPanel(obj, layerName) {
+    const panel = document.getElementById('properties-panel');
+    
+    try {
+        const props = engine.getObjectProperties(obj.id);
+        
+        if (!props) {
+            panel.innerHTML = '<p class="no-selection">Object not found</p>';
+            return;
+        }
+        
+        const hasColor = 'color' in props;
+        
+        panel.innerHTML = `
+            <div class="property-group">
+                <label>Name</label>
+                <input type="text" id="prop-name" value="${obj.name}">
+            </div>
+            
+            ${hasColor ? `
+            <div class="property-group">
+                <label>Color</label>
+                <input type="color" id="prop-color" value="${props.color}">
+            </div>
+            ` : ''}
+            
+            <div class="property-group">
+                <label>Type</label>
+                <div class="property-value">${obj.type}</div>
+            </div>
+            
+            <div class="layer-info">
+                <div class="info-row">
+                    <span class="info-label">Layer:</span>
+                    <span class="info-value">${layerName || 'Unknown'}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">ID:</span>
+                    <span class="info-value" style="font-size: 10px; word-break: break-all;">${obj.id.substring(0, 8)}...</span>
+                </div>
+            </div>
+            
+            ${hasColor ? `
+            <button id="delete-btn" class="danger">Delete Object</button>
+            ` : ''}
+        `;
+        
+        // Event listeners
+        const nameInput = document.getElementById('prop-name');
+        if (nameInput) {
+            nameInput.addEventListener('input', (e) => {
+                engine.setObjectName(obj.id, e.target.value);
+                refreshObjectsList();
+                highlightSelectedObject(obj.id);
+            });
+        }
+        
+        const colorInput = document.getElementById('prop-color');
+        if (colorInput) {
+            colorInput.addEventListener('input', (e) => {
+                engine.setObjectColor(obj.id, e.target.value);
+                refreshObjectsList();
+                highlightSelectedObject(obj.id);
+            });
+        }
+        
+        const deleteBtn = document.getElementById('delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                const layer = engine.layerManager.findLayerForObject(obj.id);
+                if (layer && !layer.locked) {
+                    layer.removeObject(obj.id);
+                    if (engine.selectionManager) {
+                        engine.selectionManager.clearSelection();
+                    }
+                    selectedObjectId = null;
+                    clearPropertiesPanel();
+                    refreshObjectsList();
+                }
+            });
+        }
+    } catch (e) {
+        console.error('Error updating properties panel:', e);
+    }
+}
+
+function clearPropertiesPanel() {
+    const panel = document.getElementById('properties-panel');
+    panel.innerHTML = '<p class="no-selection">Click an object to select it</p>';
+}
+
+// Start initialization
+initBridge();
+</script>
 
 </body>
 </html>

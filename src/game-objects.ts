@@ -7,6 +7,8 @@ export type GameObjectType = 'rectangle' | 'circle' | 'image' | 'sprite';
 export interface GameObject {
     // Unique identifier for the object
     id: string;
+    // Object name for display/identification
+    name: string;
     // Object type for serialization
     type: GameObjectType;
     // Method to draw the object on the canvas
@@ -23,6 +25,7 @@ export interface GameObject {
 // Rectangle game object implementation
 export class RectangleObject implements GameObject {
     public id: string;
+    public name: string;
     public type: GameObjectType = 'rectangle';
 
     constructor(
@@ -30,9 +33,11 @@ export class RectangleObject implements GameObject {
         public y: number,
         public w: number,
         public h: number,
-        public color: string
+        public color: string,
+        name: string = 'Rectangle'
     ) { 
         this.id = crypto.randomUUID();
+        this.name = name;
     }
 
     draw(ctx: CanvasRenderingContext2D) {
@@ -52,6 +57,7 @@ export class RectangleObject implements GameObject {
         return {
             type: this.type,
             id: this.id,
+            name: this.name,
             x: this.x,
             y: this.y,
             w: this.w,
@@ -66,7 +72,8 @@ export class RectangleObject implements GameObject {
             data.y as number,
             data.w as number,
             data.h as number,
-            data.color as string
+            data.color as string,
+            data.name as string
         );
     }
 }
@@ -74,15 +81,18 @@ export class RectangleObject implements GameObject {
 // Circle game object implementation
 export class CircleObject implements GameObject {
     public id: string;
+    public name: string;
     public type: GameObjectType = 'circle';
 
     constructor(
         public x: number,
         public y: number,
         public radius: number,
-        public color: string
+        public color: string,
+        name: string = 'Circle'
     ) { 
         this.id = crypto.randomUUID();
+        this.name = name;
     }
 
     draw(ctx: CanvasRenderingContext2D): void {
@@ -111,6 +121,7 @@ export class CircleObject implements GameObject {
         return {
             type: this.type,
             id: this.id,
+            name: this.name,
             x: this.x,
             y: this.y,
             radius: this.radius,
@@ -123,7 +134,8 @@ export class CircleObject implements GameObject {
             data.x as number,
             data.y as number,
             data.radius as number,
-            data.color as string
+            data.color as string,
+            data.name as string
         );
     }
 }
@@ -131,6 +143,7 @@ export class CircleObject implements GameObject {
 // Image Rectangle game object implementation
 export class ImageRectangleObject implements GameObject {
     public id: string;
+    public name: string;
     public type: GameObjectType = 'image';
     private image: HTMLImageElement;
     private loaded: boolean = false;
@@ -140,9 +153,11 @@ export class ImageRectangleObject implements GameObject {
         public y: number,
         public w: number,
         public h: number,
-        public imageSource: string
+        public imageSource: string,
+        name: string = 'Image'
     ) {
         this.id = crypto.randomUUID();
+        this.name = name;
         this.image = new Image();
         this.image.src = this.imageSource;
         this.image.onload = () => {
@@ -168,6 +183,7 @@ export class ImageRectangleObject implements GameObject {
         return {
             type: this.type,
             id: this.id,
+            name: this.name,
             x: this.x,
             y: this.y,
             w: this.w,
@@ -182,7 +198,8 @@ export class ImageRectangleObject implements GameObject {
             data.y as number,
             data.w as number,
             data.h as number,
-            data.imageSource as string
+            data.imageSource as string,
+            data.name as string
         );
     }
 }
@@ -190,6 +207,7 @@ export class ImageRectangleObject implements GameObject {
 // Sprite game object - draws a specific portion of an image
 export class SpriteObject implements GameObject {
     public id: string;
+    public name: string;
     public type: GameObjectType = 'sprite';
     private image: HTMLImageElement;
     private loaded: boolean = false;
@@ -197,9 +215,11 @@ export class SpriteObject implements GameObject {
     constructor(
         public destination: RectangleObject,
         public source: RectangleObject,
-        public imageSource: string
+        public imageSource: string,
+        name: string = 'Sprite'
     ) {
         this.id = crypto.randomUUID();
+        this.name = name;
         this.image = new Image();
         this.image.src = this.imageSource;
         this.image.onload = () => {
@@ -236,6 +256,7 @@ export class SpriteObject implements GameObject {
         return {
             type: this.type,
             id: this.id,
+            name: this.name,
             destination: {
                 x: this.destination.x,
                 y: this.destination.y,
@@ -275,7 +296,8 @@ export class SpriteObject implements GameObject {
         return new SpriteObject(
             destination,
             source,
-            data.imageSource as string
+            data.imageSource as string,
+            data.name as string
         );
     }
 }

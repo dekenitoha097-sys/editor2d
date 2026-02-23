@@ -10,6 +10,18 @@ const canvas = document.getElementById("canvas") as HTMLCanvasElement
 
 // Create a new engine instance with the canvas
 const engine = new Engine(canvas);
+
+// Expose engine globally for HTML-based UI (React integration)
+(window as any).editorEngine = engine;
+
+// Also expose via function for easier access
+(window as any).getEditorEngine = function() {
+    return engine;
+};
+
+// Log that engine is ready
+console.log('Editor2D engine initialized and ready!');
+console.log('Access engine via window.editorEngine or window.getEditorEngine()');
 // Start the game loop
 engine.start();
 // ============================================
@@ -36,30 +48,30 @@ engine.layerManager.setActiveLayer(gameLayer.id);
 // ============================================
 
 // Add rectangle to background layer
-const bgRect = new RectangleObject(50, 50, 200, 150, "#333333");
+const bgRect = new RectangleObject(50, 50, 200, 150, "#333333", "Background Rect");
 engine.layerManager.addObjectToLayer(bgRect, backgroundLayer.id);
 
 // Add circle to game layer
-const circle = new CircleObject(300, 200, 50, "green");
+const circle = new CircleObject(300, 200, 50, "green", "Green Circle");
 engine.layerManager.addObjectToLayer(circle, gameLayer.id);
 
 // Add rectangle to game layer
-const rect = new RectangleObject(200, 100, 100, 80, "blue");
+const rect = new RectangleObject(200, 100, 100, 80, "blue", "Blue Rectangle");
 engine.layerManager.addObjectToLayer(rect, gameLayer.id);
 
 // Add image to game layer
-const image = new ImageRectangleObject(450, 100, 150, 200, "../resources/image.png");
+const image = new ImageRectangleObject(450, 100, 150, 200, "../resources/image.png", "Hero Image");
 engine.layerManager.addObjectToLayer(image, gameLayer.id)
 
 // Sprite example with two rectangles
-const destinationRect = new RectangleObject(150, 350, 64, 64, "");
-const sourceRect = new RectangleObject(1*250, 2*256, 250, 256, "");
+const destinationRect = new RectangleObject(150, 350, 64, 64, "", "Sprite Dest");
+const sourceRect = new RectangleObject(1*250, 2*256, 250, 256, "", "Sprite Source");
 
-const sprite = new SpriteObject(destinationRect, sourceRect, "../resources/image.png");
+const sprite = new SpriteObject(destinationRect, sourceRect, "../resources/image.png", "Hero Sprite");
 engine.layerManager.addObjectToLayer(sprite, gameLayer.id);
 
 // Add rectangle to UI layer
-const uiRect = new RectangleObject(500, 500, 200, 60, "purple");
+const uiRect = new RectangleObject(500, 500, 200, 60, "purple", "UI Panel");
 engine.layerManager.addObjectToLayer(uiRect, uiLayer.id);
 
 // ============================================
