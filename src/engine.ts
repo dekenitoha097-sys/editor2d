@@ -2,6 +2,7 @@
 import { GameObject } from "./game-objects.js";
 import { SelectionManager } from "./selection-manager.js";
 import { LayerManager } from "./layer.js";
+import { Camera } from "./camera.js";
 
 export class Engine {
     // The HTML canvas element used for rendering
@@ -16,6 +17,11 @@ export class Engine {
     private isRunning: boolean = false;
     // Selection manager for handling object selection
     public selectionManager: SelectionManager | null = null;
+    // Camera for viewport transformation
+    public camera: Camera;
+    // Pan state
+    private isPanning: boolean = false;
+    private lastPanPos: { x: number; y: number } = { x: 0, y: 0 };
 
     // Constructor - initializes the engine with a canvas element
     constructor(canvas: HTMLCanvasElement) {
@@ -23,8 +29,16 @@ export class Engine {
         this.ctx = canvas.getContext("2d");
         this.layerManager = new LayerManager();
         this.selectionManager = new SelectionManager(canvas);
+        this.camera = new Camera(canvas);
+        
+        // Set up screen to world converter for selection manager
+        this.selectionManager.setScreenToWorldConverter((screenX, screenY) => {
+            return this.camera.screenToWorld(screenX, screenY);
+        });
+        
         this.setupClickHandler();
         this.setupKeyboardHandler();
+        this.setupCameraControls();
     }
 
     // Update objects in selection manager for magnetic snap detection
@@ -41,21 +55,23 @@ export class Engine {
             if (!this.selectionManager) return;
             
             const rect = this.canvas.getBoundingClientRect();
-            const x = (event.clientX - rect.left);
-            const y = (event.clientY - rect.top);
+            const screenX = (event.clientX - rect.left);
+            const screenY = (event.clientY - rect.top);
+            
+            // Convert screen coordinates to world coordinates
+            const worldPos = this.camera.screenToWorld(screenX, screenY);
             
             // Hit test all visible objects from all layers
             const objects = this.layerManager.getAllVisibleObjects();
-            const hitObject = this.selectionManager.hitTest(x, y, objects);
+            const hitObject = this.selectionManager.hitTest(worldPos.x, worldPos.y, objects);
             
             if (hitObject) {
-                this.selectionManager.select(hitObject);
-                
-                // Update layer info
+                // Get layer info
                 const layer = this.layerManager.findLayerForObject(hitObject.id);
-                if (layer) {
-                    this.selectionManager.updateLayerInfo(layer.name);
-                }
+                const layerName = layer ? layer.name : undefined;
+                
+                // Select the object with layer info
+                this.selectionManager.select(hitObject, layerName);
             } else {
                 this.selectionManager.clearSelection();
             }
@@ -94,29 +110,47 @@ export class Engine {
     // Main render function - draws all game objects to the canvas
     Render() {
         if (!this.ctx) return;
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        const ctx = this.ctx;
+        
+        // Update camera canvas size in case of resize
+        this.camera.updateCanvasSize();
+        
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Update objects in selection manager for magnetic snap detection
         this.updateSelectionManagerObjects();
+        
+        // Draw grid and origin (in screen space, before camera transform)
+        this.camera.drawGrid(ctx);
+        this.camera.drawOrigin(ctx);
+        this.camera.drawCoordinates(ctx);
+        
+        // Apply camera transformation
+        ctx.save();
+        this.camera.applyTransform(ctx);
         
         // Render all visible objects from all layers (sorted by layer order)
         const layers = this.layerManager.getLayers();
         for (const layer of layers) {
             if (layer.visible) {
-                this.ctx.globalAlpha = layer.opacity;
+                ctx.globalAlpha = layer.opacity;
                 for (const obj of layer.objects) {
-                    obj.draw(this.ctx!);
+                    obj.draw(ctx);
                 }
             }
         }
         
         // Reset opacity
-        this.ctx.globalAlpha = 1.0;
+        ctx.globalAlpha = 1.0;
         
-        // Draw selection outline if an object is selected
+        // Restore camera transformation for selection outline
+        // We need to draw selection in world space
         if (this.selectionManager) {
-            this.selectionManager.drawSelectionOutline(this.ctx!);
+            this.selectionManager.drawSelectionOutline(ctx);
         }
+        
+        // Restore context
+        ctx.restore();
     }
 
     // Export scene to JSON
@@ -147,5 +181,86 @@ export class Engine {
             this.animationId = null;
         }
         this.isRunning = false;
+    }
+
+    // Setup camera controls (zoom and pan)
+    private setupCameraControls(): void {
+        // Prevent default on wheel events
+        this.canvas.addEventListener("wheel", (event) => {
+            event.preventDefault();
+            
+            const rect = this.canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            
+            // Determine zoom direction and factor
+            const delta = event.deltaY > 0 ? 0.9 : 1.1;
+            this.camera.zoomAt(mouseX, mouseY, delta);
+        }, { passive: false });
+
+        // Middle mouse button (button 1) for panning
+        this.canvas.addEventListener("mousedown", (event) => {
+            if (event.button === 1) { // Middle click
+                event.preventDefault();
+                this.isPanning = true;
+                this.lastPanPos = { x: event.clientX, y: event.clientY };
+                this.canvas.style.cursor = "grabbing";
+            }
+        });
+
+        this.canvas.addEventListener("mousemove", (event) => {
+            if (this.isPanning) {
+                const dx = (event.clientX - this.lastPanPos.x) / this.camera.zoom;
+                const dy = (event.clientY - this.lastPanPos.y) / this.camera.zoom;
+                this.camera.pan(-dx, -dy);
+                this.lastPanPos = { x: event.clientX, y: event.clientY };
+            }
+        });
+
+        this.canvas.addEventListener("mouseup", (event) => {
+            if (event.button === 1) { // Middle click release
+                this.isPanning = false;
+                this.canvas.style.cursor = "default";
+            }
+        });
+
+        this.canvas.addEventListener("mouseleave", () => {
+            this.isPanning = false;
+            this.canvas.style.cursor = "default";
+        });
+
+        // Space key for alternative panning
+        let spacePressed = false;
+
+        document.addEventListener("keydown", (event) => {
+            if (event.code === "Space" && !spacePressed) {
+                spacePressed = true;
+                this.canvas.style.cursor = "grab";
+            }
+            // Reset camera with Home or 0 key
+            if (event.key === "Home" || event.key === "0") {
+                this.camera.reset();
+            }
+        });
+
+        document.addEventListener("keyup", (event) => {
+            if (event.code === "Space") {
+                spacePressed = false;
+                this.canvas.style.cursor = "default";
+            }
+        });
+
+        // Handle mouse move for Space+drag panning
+        this.canvas.addEventListener("mousemove", (event) => {
+            if (spacePressed && event.buttons === 1) { // Space + left click drag
+                const dx = (event.clientX - this.lastPanPos.x) / this.camera.zoom;
+                const dy = (event.clientY - this.lastPanPos.y) / this.camera.zoom;
+                this.camera.pan(-dx, -dy);
+                this.lastPanPos = { x: event.clientX, y: event.clientY };
+            } else if (spacePressed) {
+                // Just update last position when hovering
+                this.lastPanPos = { x: event.clientX, y: event.clientY };
+            }
+        });
     }
 }

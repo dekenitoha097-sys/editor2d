@@ -1,12 +1,35 @@
 {
   "name": "editor2d",
   "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
+  "description": "A 2D canvas editor with camera, magnetic snap, and layer support",
+  "license": "MIT",
   "author": "",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/engine.js",
+  "module": "dist/engine.js",
+  "types": "dist/engine.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/engine.js",
+      "types": "./dist/engine.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "canvas",
+    "2d",
+    "editor",
+    "game-engine",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
   }
 }
