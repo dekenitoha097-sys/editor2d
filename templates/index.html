@@ -1,13 +1,100 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Test TS</title>
+    <title>Editor2D</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .main-content {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .canvas-container {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        h1 {
+            margin-top: 0;
+        }
+        
+        #properties-panel {
+            width: 300px;
+            min-height: 400px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        
+        #properties-panel h2 {
+            margin-top: 0;
+            font-size: 18px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+        
+        .property-group {
+            margin-bottom: 15px;
+        }
+        
+        .property-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .property-group span {
+            display: block;
+            color: #666;
+        }
+        
+        .no-selection {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .property-value {
+            font-family: monospace;
+            background-color: #fff;
+            padding: 3px 8px;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+        }
+        
+        .layer-info {
+            background-color: #e8f4fc;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 
 <body>
 
-<h1>Test TypeScript</h1>
-<canvas style="border: 1px solid red;" id="canvas" width="800" height="600"></canvas>
+    <div class="main-content">
+        <div class="canvas-container">
+            <h1>Editor2D</h1>
+            <canvas style="border: 1px solid #333;" id="canvas" width="1500" height="800"></canvas>
+        </div>
+        
+        <div id="properties-panel">
+            <h2>Properties</h2>
+            <div id="object-info">
+                <p class="no-selection">No object selected</p>
+            </div>
+        </div>
+    </div>
+
 <script type="module" src="../dist/teste.js"></script>
 
 </body>
