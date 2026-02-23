@@ -1,5 +1,6 @@
 // Selection Manager - handles object selection, hit testing, and transformations
 import { GameObject, SpriteObject } from "./game-objects.js";
+import { MagneticSnapManager, SnapPoint, MagneticConfig } from "./magnetic-system.js";
 
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null;
 
@@ -24,9 +25,23 @@ export class SelectionManager {
     private readonly OUTLINE_WIDTH = 2;
     private readonly HANDLE_SIZE = 8;
 
-    constructor(canvas: HTMLCanvasElement) {
+    // Magnetic snap system
+    private magneticManager: MagneticSnapManager;
+    private isShiftPressed: boolean = false;
+    private overrideAttempts: number = 0;
+    private lastSnapPosition: { x: number; y: number } | null = null;
+    private allObjects: GameObject[] = [];
+
+    // Set all objects (called by engine to provide objects for snap detection)
+    setAllObjects(objects: GameObject[]): void {
+        this.allObjects = objects;
+    }
+
+    constructor(canvas: HTMLCanvasElement, magneticConfig?: Partial<MagneticConfig>) {
         this.canvas = canvas;
+        this.magneticManager = new MagneticSnapManager(magneticConfig);
         this.setupEventListeners();
+        this.setupKeyboardListeners();
     }
 
     // Get mouse position relative to canvas
@@ -52,6 +67,7 @@ export class SelectionManager {
     // Select an object
     select(obj: GameObject | null): void {
         this.selectedObject = obj;
+        this.updatePropertiesPanel(obj);
     }
 
     // Get currently selected object
@@ -62,6 +78,98 @@ export class SelectionManager {
     // Clear selection
     clearSelection(): void {
         this.selectedObject = null;
+        this.updatePropertiesPanel(null);
+    }
+
+    // Update properties panel with selected object info
+    private updatePropertiesPanel(obj: GameObject | null): void {
+        const panel = document.getElementById('object-info');
+        if (!panel) return;
+
+        if (!obj) {
+            panel.innerHTML = '<p class="no-selection">No object selected</p>';
+            return;
+        }
+
+        const bounds = obj.getBounds();
+        let html = '';
+
+        // Object type
+        html += `<div class="property-group">
+            <label>Type</label>
+            <span class="property-value">${obj.type}</span>
+        </div>`;
+
+        // Object ID
+        html += `<div class="property-group">
+            <label>ID</label>
+            <span class="property-value" style="font-size: 10px;">${obj.id.substring(0, 8)}...</span>
+        </div>`;
+
+        // Position
+        html += `<div class="property-group">
+            <label>Position</label>
+            <span class="property-value">X: ${Math.round(bounds.x)}</span>
+            <span class="property-value">Y: ${Math.round(bounds.y)}</span>
+        </div>`;
+
+        // Size
+        html += `<div class="property-group">
+            <label>Size</label>
+            <span class="property-value">W: ${Math.round(bounds.w)}</span>
+            <span class="property-value">H: ${Math.round(bounds.h)}</span>
+        </div>`;
+
+        // Type-specific properties
+        if ('color' in obj) {
+            html += `<div class="property-group">
+                <label>Color</label>
+                <span class="property-value">${(obj as any).color}</span>
+            </div>`;
+        }
+
+        if ('radius' in obj) {
+            html += `<div class="property-group">
+                <label>Radius</label>
+                <span class="property-value">${(obj as any).radius}</span>
+            </div>`;
+        }
+
+        if ('imageSource' in obj) {
+            html += `<div class="property-group">
+                <label>Image Source</label>
+                <span class="property-value" style="font-size: 10px;">${(obj as any).imageSource}</span>
+            </div>`;
+        }
+
+        // Rotation (if available)
+        if ('rotation' in obj && (obj as any).rotation !== undefined) {
+            html += `<div class="property-group">
+                <label>Rotation</label>
+                <span class="property-value">${Math.round((obj as any).rotation)}°</span>
+            </div>`;
+        }
+
+        panel.innerHTML = html;
+    }
+
+    // Update properties panel with layer info
+    updateLayerInfo(layerName: string): void {
+        const panel = document.getElementById('object-info');
+        if (!panel) return;
+
+        const currentHtml = panel.innerHTML;
+        if (currentHtml.includes('no-selection')) return;
+
+        // Add layer info at the end
+        const layerInfo = `<div class="layer-info">
+            <label>Layer</label>
+            <span class="property-value">${layerName}</span>
+        </div>`;
+
+        if (!currentHtml.includes('layer-info')) {
+            panel.innerHTML += layerInfo;
+        }
     }
 
     // Check if an object is selected
@@ -151,6 +259,12 @@ export class SelectionManager {
         });
         
         ctx.restore();
+        
+        // Draw magnetic guide lines when dragging
+        if (this.isDragging) {
+            this.magneticManager.renderGuideLines(ctx, this.canvas.width, this.canvas.height);
+            this.magneticManager.renderSnapIndicators(ctx);
+        }
     }
 
     // Setup event listeners
@@ -168,6 +282,9 @@ export class SelectionManager {
         this.canvas.addEventListener("mousedown", (event) => {
             const pos = this.getMousePosition(event);
             this.lastMousePos = pos;
+            this.overrideAttempts = 0;
+            this.lastSnapPosition = null;
+            this.magneticManager.clearSnap();
             
             if (this.selectedObject) {
                 const bounds = this.selectedObject.getBounds();
@@ -249,26 +366,56 @@ export class SelectionManager {
                 // Minimum size constraint
                 const minSize = 10;
                 if (newBounds.w >= minSize && newBounds.h >= minSize) {
-                    this.applyResize(obj, newBounds);
+                    // Apply magnetic snap to resize bounds
+                    const snapResult = this.applyResizeSnap(obj, newBounds);
+                    this.applyResize(obj, snapResult);
                 }
                 
                 this.canvas.style.cursor = this.getResizeCursor(this.activeResizeHandle);
             } else if (this.isDragging && this.selectedObject) {
-                // Handle dragging
+                // Handle dragging with magnetic snap
                 const bounds = this.selectedObject.getBounds();
-                const newX = pos.x - this.dragOffset.x;
-                const newY = pos.y - this.dragOffset.y;
+                let newX = pos.x - this.dragOffset.x;
+                let newY = pos.y - this.dragOffset.y;
+                
+                // Track if we're trying to override by force
+                const currentSnap = this.magneticManager.getCurrentSnapPoint();
+                if (currentSnap) {
+                    // Calculate distance from snap position
+                    const snapDistance = currentSnap.axis === 'x' 
+                        ? Math.abs(newX - currentSnap.snapOffset)
+                        : Math.abs(newY - currentSnap.snapOffset);
+                    
+                    // If we've moved far enough from snap, count as override attempt
+                    const config = this.magneticManager.getConfig();
+                    if (snapDistance > config.overrideDistance) {
+                        this.overrideAttempts++;
+                    }
+                }
+                
+                // Find snap points
+                const snapPoints = this.magneticManager.findSnapPoints(this.selectedObject, this.allObjects);
+                
+                // Apply snap
+                const snapResult = this.magneticManager.applySnap(
+                    newX, newY, snapPoints, this.isShiftPressed, this.overrideAttempts
+                );
+                
+                // Store last snap position for tracking
+                if (snapResult.snapped) {
+                    this.lastSnapPosition = { x: snapResult.x, y: snapResult.y };
+                }
                 
                 // Move the object based on its type
                 if ('x' in this.selectedObject && 'y' in this.selectedObject) {
-                    (this.selectedObject as any).x = newX;
-                    (this.selectedObject as any).y = newY;
+                    (this.selectedObject as any).x = snapResult.x;
+                    (this.selectedObject as any).y = snapResult.y;
                 }
                 
                 // For Sprite, also move destination
                 if (this.selectedObject instanceof SpriteObject) {
-                    this.selectedObject.destination.x = newX;
-                    this.selectedObject.destination.y = newY;
+                    this.selectedObject.destination.x = snapResult.x;
+                    this.selectedObject.destination.y = snapResult.y;
                 }
             } else if (this.selectedObject) {
                 // Change cursor if hovering over handles or selected object
@@ -292,6 +439,8 @@ export class SelectionManager {
             this.isDragging = false;
             this.isResizing = false;
             this.activeResizeHandle = null;
+            this.magneticManager.clearSnap();
+            this.overrideAttempts = 0;
             if (this.selectedObject) {
                 this.canvas.style.cursor = "grab";
             }
@@ -302,10 +451,19 @@ export class SelectionManager {
             this.isDragging = false;
             this.isResizing = false;
             this.activeResizeHandle = null;
+            this.magneticManager.clearSnap();
         });
+    }
 
-        // Keyboard - rotation
+    // Setup keyboard listeners for Shift key and other shortcuts
+    private setupKeyboardListeners(): void {
+        // Track Shift key state
         document.addEventListener("keydown", (event) => {
+            if (event.key === "Shift") {
+                this.isShiftPressed = true;
+            }
+            
+            // Rotation shortcuts
             if (!this.selectedObject) return;
             
             const rotationSpeed = 5;
@@ -335,6 +493,13 @@ export class SelectionManager {
                     // Deselect
                     this.clearSelection();
                     break;
+            }
+        });
+
+        document.addEventListener("keyup", (event) => {
+            if (event.key === "Shift") {
+                this.isShiftPressed = false;
+                this.overrideAttempts = 0;
             }
         });
     }
@@ -367,6 +532,74 @@ export class SelectionManager {
             (obj as any).w = newBounds.w;
             (obj as any).h = newBounds.h;
         }
+    }
+
+    // Apply magnetic snap to resize bounds
+    private applyResizeSnap(obj: GameObject, newBounds: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number } {
+        // Create a temporary object to get the bounds
+        const tempObj = {
+            getBounds: () => newBounds
+        } as GameObject;
+
+        // Find snap points
+        const snapPoints = this.magneticManager.findSnapPoints(tempObj, this.allObjects);
+
+        if (snapPoints.length === 0) {
+            return newBounds;
+        }
+
+        // Get the best snap point
+        const bestSnap = snapPoints[0];
+        
+        // Check for override
+        const currentSnap = this.magneticManager.getCurrentSnapPoint();
+        if (currentSnap) {
+            const config = this.magneticManager.getConfig();
+            const distance = bestSnap.distance;
+            if (distance > config.overrideDistance) {
+                this.overrideAttempts++;
+            }
+        }
+
+        if (this.magneticManager.shouldOverride(this.isShiftPressed, this.overrideAttempts)) {
+            return newBounds;
+        }
+
+        // Apply snap to the appropriate dimension
+        let result = { ...newBounds };
+        
+        switch (bestSnap.anchor) {
+            case 'left':
+                // Snap right edge to target's left edge
+                result.x = bestSnap.snapOffset;
+                result.w = newBounds.x + newBounds.w - bestSnap.snapOffset;
+                break;
+            case 'right':
+                // Snap left edge to target's right edge
+                result.w = bestSnap.snapOffset + newBounds.w - newBounds.x;
+                result.x = bestSnap.snapOffset;
+                break;
+            case 'top':
+                // Snap bottom edge to target's top edge
+                result.y = bestSnap.snapOffset;
+                result.h = newBounds.y + newBounds.h - bestSnap.snapOffset;
+                break;
+            case 'bottom':
+                // Snap top edge to target's bottom edge
+                result.h = bestSnap.snapOffset + newBounds.h - newBounds.y;
+                result.y = bestSnap.snapOffset;
+                break;
+            case 'center-x':
+                // Center X alignment
+                result.x = bestSnap.snapOffset;
+                break;
+            case 'center-y':
+                // Center Y alignment
+                result.y = bestSnap.snapOffset;
+                break;
+        }
+
+        return result;
     }
 
     // Get zoom level (reserved for future use)
