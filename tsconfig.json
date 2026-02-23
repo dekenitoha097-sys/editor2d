@@ -3,13 +3,15 @@
     "rootDir": "./src",
     "outDir": "./dist",
 
-    "module": "nodenext",           /* Changé ici */
+    "module": "nodenext",
     "target": "esnext", 
 
-    "moduleResolution": "nodenext", /* Doit correspondre à 'module' */
+    "moduleResolution": "nodenext",
 
     "strict": true,
     "skipLibCheck": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true
   }
 }
